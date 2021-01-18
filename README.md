@@ -8,7 +8,8 @@ Example output:
 
 Let A be a N by N matrix defined by 
 
-<img src="https://latex.codecogs.com/png.latex?\begin{align*}&A_{ij} = A_{ji} = 1 \\ &A_{ii} = 1 + 0.1(i-1),\quad\text{i = 1, 2..,min(5, N)}\\ &A_{ii} = 2i - 1,\quad\text{otherwise}\end{align*}"/> 
+![sc1](https://github.com/plsda/Configuration-Interaction/blob/main/code/eqn.PNG)
+
 (the example used in [3])
 
 For N = 1000
