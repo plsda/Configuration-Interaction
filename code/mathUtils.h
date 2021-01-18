@@ -77,13 +77,13 @@ inline void scaleAndMultiplyMatrices(Matrix& result, Matrix m1, Matrix m2, r64 m
 inline void scaleAndMultiplyMatrices(Matrix& result, Matrix m1, Matrix m2, r64 m1m2Coefficient, 
 												 MATRIX_OP_FLAG m1Transpose, MATRIX_OP_FLAG m2Transpose);
 
-inline Vector vmmul(Vector v, Matrix m);
-inline void madd(Matrix& result, Matrix m1, Matrix m2);
-inline void mmuladd(Matrix& result, Matrix m1, Matrix m2);
-inline void mmul(Matrix& result, Matrix m1, Matrix m2, bool, bool);
-inline Matrix mmul(Matrix m1, Matrix m2, bool, bool);
-inline void mmul(Matrix& result, Matrix m1, Matrix m2);
-inline Matrix mmul(Matrix m1, Matrix m2);
+//inline Vector vmmul(Vector v, Matrix m);
+//inline void madd(Matrix& result, Matrix m1, Matrix m2);
+//inline void mmuladd(Matrix& result, Matrix m1, Matrix m2);
+//inline void mmul(Matrix& result, Matrix m1, Matrix m2, bool, bool);
+//inline Matrix mmul(Matrix m1, Matrix m2, bool, bool);
+//inline void mmul(Matrix& result, Matrix m1, Matrix m2);
+//inline Matrix mmul(Matrix m1, Matrix m2);
 inline int orthonormalizeVectors(Matrix basis, r64* workArea);
 
 template<typename A, typename B>
@@ -694,26 +694,19 @@ inline void scaleAndAddMatrices(Matrix& result, Matrix m, r64 mCoefficient, MATR
 					 result.elements, result.columns);
 }
 
-struct MatrixInfo
-{
-	size_t rows;
-	size_t columns;
-	size_t leading;
-};
-
 //For (scalar-)matrix-matrix multiplication (adds the result to 'result')
 inline void scaleAndMultiplyMatrices(Matrix& result, Matrix m1, Matrix m2, r64 m1m2Coefficient, r64 resultCoefficient, 
                 				  			 MATRIX_OP_FLAG m1Transpose, MATRIX_OP_FLAG m2Transpose)
 {
-	MatrixInfo m1Dim = ((m1Transpose == M_TRANSPOSE) ? MatrixInfo{m1.columns, m1.rows, m1.rows} : MatrixInfo{m1.rows, m1.columns, m1.columns});
-	MatrixInfo m2Dim = ((m2Transpose == M_TRANSPOSE) ? MatrixInfo{m2.columns, m2.rows, m2.rows} : MatrixInfo{m2.rows, m2.columns, m2.columns});
+	Dim m1Dim = ((m1Transpose == M_TRANSPOSE) ? Dim{m1.columns, m1.rows} : Dim{m1.rows, m1.columns});
+	Dim m2Dim = ((m2Transpose == M_TRANSPOSE) ? Dim{m2.columns, m2.rows} : Dim{m2.rows, m2.columns});
 
 	assert((m1Dim.columns == m2Dim.rows) && (m1Dim.rows == result.rows) && (m2Dim.columns == result.columns));
 	//result.rows = m1Dim.rows;
 	//result.columns = m2Dim.columns;
 
 	cblas_dgemm(CblasRowMajor, (CBLAS_TRANSPOSE)cblasFlagTable[(int)m1Transpose], (CBLAS_TRANSPOSE)cblasFlagTable[(int)m2Transpose], 
-					m1Dim.rows, m2Dim.columns, m1Dim.columns, m1m2Coefficient, m1.elements, m1.columns, //m1Dim.leading, 
+					m1Dim.rows, m2Dim.columns, m1Dim.columns, m1m2Coefficient, m1.elements, m1.columns, 
 					m2.elements, m2.columns, resultCoefficient, result.elements, result.columns);
 }
 
@@ -730,73 +723,6 @@ inline void scaleAndMultiplyMatrices(Matrix& result, Matrix m1, Matrix m2, r64 m
 	cblas_dgemm(CblasRowMajor, (CBLAS_TRANSPOSE)cblasFlagTable[(int)m1Transpose], (CBLAS_TRANSPOSE)cblasFlagTable[(int)m2Transpose], 
 					m1Dim.rows, m2Dim.columns, m1Dim.columns, m1m2Coefficient, m1.elements, m1.columns, //m1Dim.columns and m2Dim.columns ?
 					m2.elements, m2.columns, 0.0, result.elements, result.columns);
-}
-
-
-// ####################################################################
-
-inline void madd(Matrix& result, Matrix m1, Matrix m2)
-{
-	assert((m1.rows == m2.rows) && (m1.columns == m2.columns));
-
-	result.rows = m1.rows;
-	result.columns = m1.columns;
-
-	mkl_domatadd('R', 'N', 'N', m1.rows, m1.columns, 1.0, m1.elements, m1.columns, 1.0, m2.elements, m2.columns, result.elements, result.columns);
-}
-
-
-inline void mmuladd(Matrix& result, Matrix m1, Matrix m2)
-{
-	assert((m1.columns == m2.rows) && (m1.rows == result.rows) && (m2.columns == result.columns));
-
-	cblas_dgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, result.rows, result.columns, 
-					m1.columns, 1.0, m1.elements, m1.columns, m2.elements, m2.columns, 1.0, 
-					result.elements, result.columns);
-}
-
-inline void mmul(Matrix& result, Matrix m1, Matrix m2, bool m1Transpose, bool m2Transpose)
-{
-
-	int m1Trans = (int)m1Transpose;
-	int m2Trans = (int)m2Transpose;
-	assert((m1Trans*m1.rows + (1-m1Trans)*m1.columns) == ((1-m2Trans)*m2.rows + m2Trans*m2.columns));
-
-	result.rows = m1Transpose ? m1.columns : m1.rows;
-	result.columns = m2Transpose ? m2.rows : m2.columns;
-	cblas_dgemm(CblasRowMajor, m1Transpose ? CblasTrans : CblasNoTrans, m2Transpose ? CblasTrans : CblasNoTrans,
-					result.rows, result.columns, m1Transpose ? m1.rows : m1.columns, 1.0, m1.elements,
-					m1.columns, m2.elements, m2.columns, 0, result.elements, result.columns);
-}
-
-inline Matrix mmul(Matrix m1, Matrix m2, bool m1Transpose, bool m2Transpose)
-{
-	Matrix result;
-	result.rows = m1Transpose ? m1.columns : m1.rows;
-	result.columns = m2Transpose ? m2.rows : m2.columns;
-	result.elements = (r64*)calloc(result.rows*result.columns, sizeof(r64));
-
-	if(result.elements != 0)
-	{
-		cblas_dgemm(CblasRowMajor, m1Transpose ? CblasTrans : CblasNoTrans, m2Transpose ? CblasTrans : CblasNoTrans,
-						result.rows , result.columns, m1Transpose ? m1.rows : m1.columns, 1.0, m1.elements,
-						m1.columns, m2.elements, m2.columns, 0, result.elements, result.columns);
-	}
-	else
-	{
-	}
-
-	return result;
-}
-
-inline void mmul(Matrix& result, Matrix m1, Matrix m2)
-{
-	mmul(result, m1, m2, false, false);
-}
-
-inline Matrix mmul(Matrix m1, Matrix m2)
-{
-	return mmul(m1, m2, false, false);
 }
 
 

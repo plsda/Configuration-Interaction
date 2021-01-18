@@ -1,21 +1,25 @@
 # Configuration-Interaction
 
-Davidson's algorithm for finding the lowest eigenvalue(s) of diagonally dominant (real symmetric) matrices. For use in the CI method.
+Davidson's algorithm is a numerical algorithm for finding the lowest eigenvalue(s) of diagonally dominant (real symmetric) matrices. Davidson's algorithm
+and its derivatives are widely used in configuration interaction calculations.
 
-Examples for small matrices(still fails for larger matrices):
-
-Output for matrix 
-
-<img src="https://latex.codecogs.com/png.latex?\begin{pmatrix}10&0.01&0&00&.0001\\0.01&20.1&0&0.02&0\\0&0&40.3&0&0\\0&0.02&0&39.8&0.1\\0.0001&0&0&0.1&30\end{pmatrix}"/> 
-
-![sc1](https://github.com/plsda/Configuration-Interaction/blob/main/code/sampleOutput.PNG)
+Example output:
 
 
-Two iterations yield lowest eigenvalue 7.7827176025 for 
+Let A be a N by N matrix defined by 
 
-<img src="https://latex.codecogs.com/png.latex?\begin{pmatrix}11.711783196508682&0.0&0.71016571550645469&4.4279305398724329&0.0\\0.0&13.160405285805840&0.0&0.0&0.0\\0.71016571550645469&0.0&18.901150547807244&0.0&5.4240546891689814\\4.4279305398724329&0.0&0.0&13.332956938383129&1.0312204351939451\\0.0&0.0&5.4240546891689814&1.0312204351939451&14.0\end{pmatrix}"/> , 
+<img src="https://latex.codecogs.com/png.latex?A_{ij} = A_{ji} = 1, \\A_{ii} = 1 + 0.1(i-1),\quad\text{i = 1, 2..,min(5, N)}, \\A_{ii} = 2i - 1,\quad\text{otherwise}"/> 
+(the example used in [3])
 
-while full diagonalization gives 7.7548029175 as the lowest eigenvalue.
+For N = 1000
+
+![sc1](https://github.com/plsda/Configuration-Interaction/blob/main/code/sampleOutput1000.PNG)
+
+For N = 10000
+
+![sc1](https://github.com/plsda/Configuration-Interaction/blob/main/code/sampleOutput10000.PNG)
+
+
 
 
 
