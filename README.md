@@ -8,7 +8,7 @@ Example output:
 
 Let A be a N by N matrix defined by 
 
-<img src="https://latex.codecogs.com/png.latex?A_{ij} = A_{ji} = 1, \\A_{ii} = 1 + 0.1(i-1),\quad\text{i = 1, 2..,min(5, N)}, \\A_{ii} = 2i - 1,\quad\text{otherwise}"/> 
+<img src="https://latex.codecogs.com/png.latex?\begin{flalign*}&A_{ij} = A_{ji} = 1\\ &A_{ii} = 1 + 0.1(i-1),\quad\text{i = 1, 2..,min(5, N)}\\ &A_{ii} = 2i - 1,\quad\text{otherwise}\end{flalign*}"/> 
 (the example used in [3])
 
 For N = 1000
