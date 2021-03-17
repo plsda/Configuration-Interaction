@@ -4,318 +4,199 @@
 #include <cfloat>
 #include <ctime>
 #include <cmath>
-//#include <gsl/gsl_math.h>
-//#include <gsl/gsl_integration.h>
 
-//#define CI_DEBUG //Define to enable debug functions and macros such as printMatrix and assert
+//#define CI_DEBUG //Define to enable debug functions and macros such as debugPrintMatrix and assert
+
+#ifndef CI_DEBUG
+   #define NDEBUG
+#endif
 
 #include "mathutils.h"
-
-enum GUESS_TYPE
-{
-	GUESS_SMALLEST,	//Guess vectors are chosen according to the smallest diagonal elements
-	GUESS_LARGEST,		//Guess vectors are chosen according to the largest diagonal elements
-	GUESS_BLOCK,		//Guess vectors are the eigenvalues of a leading block of the matrix
-};
-
-struct DavidsonInfo
-{
-	const int maxIterations;
-	const int guessVectorCount;
-	int completedIterations;
-	r64 elapsedTime;
-	r64 tolerance;
-};
-
-r64 findLowestEigenvalue(Matrix matrix, r64* diagonal, Matrix subspaceBasis, DavidsonInfo& info);
-void generateTestMatrix(Matrix& result, r64* diagonal, r64 sparseness, r64 diagonalWeight);
-template <typename M> void generateTestMatrix(Matrix& result, r64* diagonal, M matrix);
-void generateGuessVectors(Matrix& matrix, r64* diagonal, Matrix& guessVectors, int guessVectorCount, GUESS_TYPE guessType);
+#include "ci_integrals.h"
 
 int main()
 {
-	srand((int)time(0));
-	r64 scale = 1.0/(r64)RAND_MAX;
 
-	const int matrixDim = 1000;
-	const int maxIterations = 10;
-	const int guessVectorCount = 4;
-	const r64 tolerance = 0.00001; //Squared
-
-	//NOTE: Hermitian(real symmetric) matrix
-	Matrix testMatrix(matrixDim, matrixDim);
-	Matrix subspaceBasis(maxIterations + guessVectorCount, matrixDim, guessVectorCount, matrixDim);	//Rows of the matrix form the vectors and components of a vector are stored contiguously. 
-	r64 diagonal[matrixDim];
-
-	//generateTestMatrix(testMatrix, diagonal, scale, 10);
-	generateTestMatrix(testMatrix, diagonal, 
-							 [](int row, int column) { 
-							 	return (row == column) ? (row < 5 ? (1 + 0.1*row) : (2*(row + 1) - 1)) : 1.0; 
-							 });
-	generateGuessVectors(testMatrix, diagonal, subspaceBasis, guessVectorCount, GUESS_BLOCK);
+   // In atomic units
+   r64 wellWidth = 4.0;
 
 
-	printMatrix(testMatrix, true);
-	printMatrix(subspaceBasis, true);
+   // Simply take the first *dim* basis functions, no fancy stuff here
+   size_t maxWavenumber = 2;
+   size_t dim = choose2(maxWavenumber);
+   Matrix hamiltonian(dim, dim);
 
-	DavidsonInfo info = {maxIterations, guessVectorCount, 0, 0, tolerance};
+   size_t maxSteps = 10;
+   r64* rombergArray = (r64*)malloc(4*maxSteps*sizeof(*rombergArray));
 
-	r64 eigenvalue = findLowestEigenvalue(testMatrix, diagonal, subspaceBasis, info);
+   size_t i = 1;
+   size_t j = 2;
+   size_t k = 1;
+   size_t l = 2;
 
-	r64* eigenvalues = (r64*)calloc(matrixDim, sizeof(r64));
-	clock_t clockBegin = clock();
+   for(int row = 0; row < dim; row++)
+   {
+      for(int column = row; column < dim; column++)
+      {
 
-	LAPACKE_dsyev(LAPACK_ROW_MAJOR, 'N', 'L', testMatrix.rows, testMatrix.elements, testMatrix.columns, eigenvalues); 
+         // Integrals are recalculated each time
+         r64 oneElectronContribution = ((i == k)*(j == l) - (j == k)*(i == l));
 
-	clock_t clockEnd = clock();
-	r64 fullDiagonalizationTime = ((r64)(clockEnd - clockBegin)) / CLOCKS_PER_SEC;
+         r64 twoElectronContribution = 0;
 
-	printf("Calculated eigenvalue:    %.*f\nActual lowest eigenvalue: %.*f", 10, eigenvalue, 10, eigenvalues[0]);
-	printf("\n\nCompleted iterations: %i", info.completedIterations);
-	printf("\n\nDavidson time: %fs", info.elapsedTime);
-	printf("\n\nFull diagonalization time: %fs", fullDiagonalizationTime);
+         int ijParity = ((i ^ j) & 1);
+         int klParity = ((k ^ l) & 1);
+         if((ijParity && klParity) || (!ijParity && !klParity))
+         {
+            clock_t clockBegin = clock();
+            twoElectronContribution = getTwoElectronIntegral(i, j, k, l, wellWidth, rombergArray, maxSteps);
+            clock_t clockEnd = clock();
 
-	getchar();
-	return 0;
-}
+            r64 intTime = ((r64)(clockEnd - clockBegin)) / CLOCKS_PER_SEC;
 
-r64 findLowestEigenvalue(Matrix matrix, r64* diagonal, Matrix subspaceBasis, DavidsonInfo& info)
-{
-	const size_t matrixDim = matrix.rows;
-	const int maxIterations = info.maxIterations;
-	const int guessVectorCount = info.guessVectorCount;
-	const r64 tolerance = info.tolerance;
+            //if(intTime > 0.03)
+            //{
+            //   printf("%fs \t\t i = %zd, j = %zd, k = %zd, l = %zd, \t %f\n", intTime, i, j, k, l, twoElectronContribution);
+            //}
+         }
 
-	size_t subspaceMaxDim = maxIterations + guessVectorCount;
-	Matrix sigmaMatrix(subspaceMaxDim , subspaceBasis.columns); //Rows of sigmaMatrix are the sigma vectors
-	Matrix projectedMatrix(subspaceMaxDim, subspaceMaxDim);		
-	Matrix projectedMatrixCopy(subspaceMaxDim, subspaceMaxDim);		
-	Matrix eigenvectors(subspaceMaxDim, subspaceMaxDim);		
-	Matrix eigenLHS(1, subspaceBasis.columns); //LHS of Av = b
-	Matrix eigenRHS(1, subspaceBasis.columns); //RHS of Av = b, the Ritz vector
-	r64* eigenvalues = (r64*)calloc(/*matrixDim*/subspaceMaxDim, sizeof(r64));
+         // Normalization from one-electron wavefunctions & physical constants
+         oneElectronContribution *= 1.0/2.0*(PI64*PI64/(wellWidth*wellWidth)) * (k*k + l*l);
+         twoElectronContribution *= 2.0/(wellWidth*wellWidth);
 
-	//Rows of sigmaMatrix are the sigma vectors
-	sigmaMatrix = subspaceBasis*transposed(matrix);
-	projectedMatrix = subspaceBasis*transposed(sigmaMatrix);
+         hamiltonian(row, column) = oneElectronContribution + twoElectronContribution;
+         hamiltonian(column, row) = hamiltonian(row, column);
 
-	assert(projectedMatrix.rows == projectedMatrix.columns);
+         debugPrintMatrix(hamiltonian);
 
-	printMatrix(sigmaMatrix, true);
-	printMatrix(projectedMatrix, true);
+         if(j++ == maxWavenumber)
+         {
+            i++;
+            j = i + 1;
+         }
 
-	//Pack projectedMatrix(store lower triangular part)
-	size_t flatIndex = 0;
-	for(int row = 0; row < projectedMatrix.rows; row++)
-	{
-		for(int column = 0; column < row+1; column++)
-		{
-			projectedMatrix[flatIndex++] = projectedMatrix(row,column);
-		}
-	}
+      }
 
-	printMatrix(projectedMatrix, true);
-	printPacked(projectedMatrix, true);
+      if(l++ == maxWavenumber)
+      {
+         k++;
+         l = k + 1;
+      }
 
-	//### Begin Davidson ###
+      i = k;
+      j = l;
 
-	r64 eigenvalue = 0;
-	int iteration = 0;
-
-	clock_t clockBegin = clock();
-
-	for(iteration; iteration < maxIterations; iteration++)
-	{
-		r64 absErrorUpperBound = 0;
-
-		eigenvectors.dim = projectedMatrix.dim;
-		size_t elementsInLowerTriangle = projectedMatrix.rows*(projectedMatrix.rows + 1)/2;
-		cblas_dcopy(elementsInLowerTriangle, projectedMatrix.elements, 1, projectedMatrixCopy.elements, 1);
-
-		LAPACKE_dspev(LAPACK_ROW_MAJOR, 'V', 'L', eigenvectors.rows, projectedMatrixCopy.elements, 
-												eigenvalues, eigenvectors.elements, eigenvectors.columns);
-
-		printMatrix(eigenvectors, true);
-
-		eigenvalue = eigenvalues[0]; 		  		 		 //Seek the lowest eigenvalue
-		cblas_dcopy(projectedMatrix.rows, eigenvectors.elements, eigenvectors.rows, eigenvectors.elements, 1);
-		eigenvectors.dim = {1, projectedMatrix.rows}; //Pick only the 1st eigenvector since we seek only the lowest eigenvalue
-
-		printMatrix(eigenvectors, true);
-
-		eigenLHS = eigenvectors*sigmaMatrix;
-		eigenRHS = eigenvectors*subspaceBasis;
-		Vector correctionVector(subspaceBasis(subspaceBasis.rows));
-
-		printMatrix(eigenLHS, true);
-		printMatrix(eigenRHS, true);
-		printMatrix(correctionVector, true);
-
-		for(int i = 0; i < correctionVector.dim; i++)
-		{
-			r64 residual = eigenLHS(0,i) - eigenvalue*eigenRHS(0,i);
-			r64 preconditioner = 1.0/(eigenvalue - diagonal[i]);
-			correctionVector[i] = preconditioner*residual;
-			absErrorUpperBound += residual*residual;
-		}
-
-		if(absErrorUpperBound < tolerance)
-		{
-			break;
-		}
-
-		orthonormalizeVectorAgainst(correctionVector, subspaceBasis);
-		subspaceBasis.rows++;
-
-		Vector newBasisVector(subspaceBasis(subspaceBasis.rows-1));
-
-		//Matrix basisNorm = subspaceBasis*transposed(subspaceBasis);
-
-		printMatrix(basisNorm, true);
-
-		Vector newSigmaVector(sigmaMatrix(sigmaMatrix.rows++));
-		newSigmaVector = matrix*newBasisVector; 
-
-		//Projected matrix is symmetric, so we only need to store the new row(using lower triangular part)
-		Vector projectedMatrixNewRow(projectedMatrix.columns, &projectedMatrix[elementsInLowerTriangle]); 
-		projectedMatrixNewRow = subspaceBasis*newSigmaVector;
-		projectedMatrix.rows++;
-		projectedMatrix.columns++;
-
-		printMatrix(subspaceBasis, true);
-		printMatrix(projectedMatrixNewRow, true);
-		printMatrix(projectedMatrix, true);
-		printPacked(projectedMatrix, true);
-	}
-
-	clock_t clockDavidsonEnd = clock();
-
-	r64 davidsonTime = ((r64)(clockDavidsonEnd - clockBegin)) / CLOCKS_PER_SEC;
-
-	info.completedIterations = iteration;
-	info.elapsedTime = davidsonTime;
-
-	free(sigmaMatrix.elements);
-	free(projectedMatrix.elements);
-	free(projectedMatrixCopy.elements);
-	free(eigenvectors.elements);
-	free(eigenLHS.elements);
-	free(eigenRHS.elements);
-	free(eigenvalues);
-
-	return eigenvalue;
-}
-
-void generateTestMatrix(Matrix& result, r64* diagonal, r64 sparseness, r64 diagonalWeight)
-{
-	size_t matrixDim = result.rows;
-	for(int column = 0; column < matrixDim; column++)
-	{
-		for(int row = column; row < matrixDim; row++)
-		{
-			int randomNumber = rand();
-			r64 matrixElement = sparseness*randomNumber;
-			result(row, column) = matrixElement;
-			result(column,row) = matrixElement;
-		}
-
-		r64& diagonalElement = result(column,column);
-		diagonalElement += column + diagonalWeight;
-		diagonal[column] = diagonalElement;
-	}
-}
-
-template <typename M>
-void generateTestMatrix(Matrix& result, r64* diagonal, M matrix)
-{
-	size_t matrixDim = result.rows;
-	for(int column = 0; column < matrixDim; column++)
-	{
-		for(int row = column; row < matrixDim; row++)
-		{
-			result(row, column) = matrix(row, column);
-			result(column,row) = result(row, column);
-		}
-		diagonal[column] = result(column, column);
-	}
-}
-
-void generateGuessVectors(Matrix& matrix, r64* diagonal, Matrix& guessVectors, int guessVectorCount, GUESS_TYPE guessType)
-{
-	if(guessType == GUESS_SMALLEST || guessType == GUESS_LARGEST)
-	{
-		int* largestDiagonalIndices= (int*)malloc(guessVectorCount*sizeof(int));
-		r64 compareLimitValue;
-		r64 defaultCompare;
-		if(guessType == GUESS_SMALLEST)
-		{
-			compareLimitValue = DBL_MAX;
-			defaultCompare = compareLimitValue - 1.0;
-		}
-		else
-		{
-			compareLimitValue = DBL_MIN;
-			defaultCompare = compareLimitValue + 1.0;
-		}
-		
-		r64* sortedDiagonal = (r64*)malloc(matrix.rows*sizeof(r64));
-		memcpy(sortedDiagonal, diagonal, matrix.rows*sizeof(r64));
-
-		for(int vectorCount = 0; vectorCount < guessVectorCount; vectorCount++)
-		{
-			r64 compare = defaultCompare;
-			int compareIndex = 0;
-
-			for(int i = 0; i < matrix.rows; i++)
-			{
-				if((guessType == GUESS_SMALLEST && sortedDiagonal[i] <= compare)||
-					(guessType == GUESS_LARGEST && sortedDiagonal[i] >= compare))
-				{
-					compare = sortedDiagonal[i];
-					compareIndex = i;
-				}
-			}
-
-			sortedDiagonal[compareIndex] = compareLimitValue;
-			largestDiagonalIndices[vectorCount] = compareIndex;
-		}
+      printf("\n\n %d/%zd \n\n", row + 1, dim);
+   }
 
 
-		sort(largestDiagonalIndices, guessVectorCount);
-		for(int i = 0; i < guessVectorCount; i++)
-		{
-			guessVectors(i,largestDiagonalIndices[i]) = 1.0;
-		}
+   free(rombergArray);
 
-		free(largestDiagonalIndices);
-		free(sortedDiagonal);
-	}
-	else
-	{
-		for(int row = 0; row < guessVectorCount; row++)
-		{
-			for(int column = 0; column < guessVectorCount; column++)
-			{
-				guessVectors(row, column) = matrix(row,column);
-				guessVectors(column, row) = guessVectors(row, column);
-			}
-		}
+#if 1
+   const size_t matrixDim = dim;
+   const size_t maxIterations = 20;
+   const size_t guessVectorCount = 1;
+   const r64 tolerance = 10e-12; //Squared
 
-		printMatrix(guessVectors, true);
-		r64* eigenvalues = (r64*)malloc(guessVectorCount*sizeof(r64));
-		int info = (int) LAPACKE_dsyev(LAPACK_ROW_MAJOR, 'V', 'L', guessVectorCount, guessVectors.elements, guessVectors.columns, eigenvalues);
+   //NOTE: Hermitian(real symmetric) matrix
+   Matrix subspaceBasis(maxIterations + guessVectorCount, matrixDim, guessVectorCount, matrixDim); //Rows of the matrix form the vectors and components of a vector are stored contiguously. 
 
-		for(int column = 0; column < guessVectorCount; column++)
-		{
-			for(int row = column; row < guessVectorCount; row++)
-			{
-				printMatrix(guessVectors, true);
-				r64 element = guessVectors(row,column);
-				guessVectors(row,column) = guessVectors(column,row);
-				guessVectors(column,row) = element;
-			}
-		}
-	}
+   generateGuessVectors(hamiltonian, subspaceBasis, guessVectorCount, GUESS_BLOCK);
+
+   debugPrintMatrix(hamiltonian);
+   debugPrintMatrix(subspaceBasis);
+
+   DavidsonInfo info = {maxIterations, guessVectorCount, 0, 0, tolerance};
+
+   r64 eigenvalue = findLowestEigenpair(hamiltonian, subspaceBasis, info);
+   Vector eigenvector(subspaceBasis(0));
+   printMatrix(eigenvector);
+
+   FILE* outputFile = fopen("E:\\Thesis\\code_visualization\\code\\CI_vector.txt", "wb");
+   fwrite(eigenvector.elements, eigenvector.dim*sizeof(*eigenvector.elements), 1, outputFile);
+   fclose(outputFile);
+
+   // for testing
+   
+   r64* eigenvalues = (r64*)calloc(matrixDim, sizeof(r64));
+   LAPACKE_dsyev(LAPACK_ROW_MAJOR, 'V', 'L', hamiltonian.rows, hamiltonian.elements, hamiltonian.columns, eigenvalues); 
+   for(int n = 0; n < dim; n++)
+   {
+      hamiltonian(0, n) = hamiltonian(n, 0);
+   }
+   Vector actualEigenvector(hamiltonian(0));
+   printMatrix(actualEigenvector);
+   //FILE* outputFile = fopen("CI_vector.txt", "wb");
+   //fwrite(actualEigenvector.elements, actualEigenvector.dim*sizeof(*actualEigenvector.elements), 1, outputFile);
+   //fclose(outputFile);
+   //
+
+   maxSteps = 15;
+   rombergArray = (r64*)malloc(4*maxSteps*sizeof(*rombergArray));
+   size_t rombergEvals = 0;
+   auto varIntegrand = [eigenvalue, eigenvector, wellWidth, maxSteps, tolerance, rombergArray, &rombergEvals](r64 x1)
+   {
+      auto inner = [eigenvalue, eigenvector, wellWidth, x1, &rombergEvals](r64 x2)
+      {
+
+         r64 value = 0;
+         if(!floatCompare(x1, x2))
+         {
+            r64 wavefunction = 0;
+            r64 sum1 = 0;
+            r64 sum2 = 0;
+
+            size_t coeffIndex = 0;
+            size_t maxWavenumber = (size_t)(1 + (int)sqrt(1 + 8*eigenvector.dim)) / 2;
+
+            for(size_t i = 1; i <= maxWavenumber; i++)
+            {
+               for(size_t j = i + 1; j <= maxWavenumber; j++)
+               {
+                  r64 n = i*PI64/wellWidth;
+                  r64 m = j*PI64/wellWidth;
+
+                  r64 cn = eigenvector.elements[coeffIndex++];
+                  r64 waveTerm = cn*SIGN(x1 - x2)*(sin(n*x1)*sin(m*x2) - sin(n*x2)*sin(m*x1));
+                  wavefunction += waveTerm;
+                  sum1 += i*i*waveTerm;
+                  sum2 += j*j*waveTerm;
+               }
+            }
+
+            wavefunction *= 2.0/(wellWidth*sqrt(2.0));
+            value = 1.0/(wellWidth*sqrt(2.0))*PI64*PI64/(wellWidth*wellWidth)*(sum1 + sum2) + wavefunction/(x1 - x2);
+
+            value -= eigenvalue*wavefunction;
+            value *= value;
+
+            return value;
+         }
+
+         return value;
+      };
+
+      //r64 value = 2.0*rombergIntegrate(inner, 0.0, x1, rombergArray, maxSteps, tolerance);
+      //r64 value = 2.0*adaptiveSimpson(inner, 0.0, x1, tolerance, maxSteps);
+      r64 value = 2.0*tanhSinhQuadrature(inner, 0.0, x1, 1e-12);
+
+      return value;
+   };
+
+   //r64 localEnergyVariance = rombergIntegrate(varIntegrand, 0, wellWidth, rombergArray + 2*maxSteps, maxSteps, tolerance);
+   //r64 localEnergyVariance = adaptiveSimpson(varIntegrand, 0.0, wellWidth, tolerance, maxSteps);
+   r64 localEnergyVariance = tanhSinhQuadrature(varIntegrand, 0.0, wellWidth, 1e-12);
+
+   printf("Basis size: %zd\n\n", dim);
+   printf("Calculated eigenvalue: %.10f\n", eigenvalue);
+   printf("Actual eigenvalue: %.10f\n", eigenvalues[0]);
+   printf("Variance: %.10f\n",localEnergyVariance);
+   printf("\n\nCompleted iterations: %i", info.completedIterations);
+   printf("\n\nDavidson time: %fs", info.elapsedTime);
+#endif
+
+   getchar();
+   return 0;
 }
 
 
