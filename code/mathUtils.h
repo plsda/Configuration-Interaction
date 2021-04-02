@@ -886,8 +886,9 @@ r64 findLowestEigenpair(Matrix matrix, Matrix subspaceBasis, DavidsonInfo& info)
 
       Vector newBasisVector(subspaceBasis(subspaceBasis.rows-1));
 
-//      Matrix basisNorm = subspaceBasis*transposed(subspaceBasis);
-
+      // This can be used to illustrate how orthogonal the basis vectors are to each other and 
+      // debug any errors in the basis orthonogalization
+      //Matrix basisNorm = subspaceBasis*transposed(subspaceBasis);
       //debugPrintMatrix(basisNorm);
 
       Vector newSigmaVector(sigmaMatrix(sigmaMatrix.rows++));
@@ -912,20 +913,23 @@ r64 findLowestEigenpair(Matrix matrix, Matrix subspaceBasis, DavidsonInfo& info)
    info.completedIterations = iteration;
    info.elapsedTime = davidsonTime;
 
-   // Form the approximate eigenvector and store it in the first row of subspaceBasis
-   projectedMatrix = eigenvectors*subspaceBasis;
-   for(int i = 0; i < projectedMatrix.columns; i++)
-   {
-      subspaceBasis[i] = projectedMatrix[i];
-   }
-
    free(sigmaMatrix.elements);
    free(projectedMatrix.elements);
    free(projectedMatrixCopy.elements);
-   free(eigenvectors.elements);
    free(eigenLHS.elements);
    free(eigenRHS.elements);
    free(eigenvalues);
+
+   // Form the approximate eigenvector and store it in the first row of subspaceBasis
+   Matrix temp(eigenvectors.rows, subspaceBasis.columns); // Need a temp here since my template expression library doesn't have any precautions for aliasing
+   temp = eigenvectors*subspaceBasis;
+   for(int i = 0; i < temp.columns; i++)
+   {
+      subspaceBasis[i] = temp[i];
+   }
+
+   free(temp.elements);
+   free(eigenvectors.elements);
 
    return eigenvalue;
 }

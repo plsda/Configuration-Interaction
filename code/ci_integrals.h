@@ -9,8 +9,6 @@
 template <typename f>
 r64 trapezoidalRuleStage(f& integrand, r64 lowerBound, r64 upperBound, size_t stage)
 {
-   //assert(lowerBound < upperBound);
-
    r64 result = 0;
 
    if(stage == 0)
@@ -87,12 +85,12 @@ r64 rombergIntegrate(f& integrand, r64 lowerBound, r64 upperBound, r64* rombergA
    return result;
 }
 
-//A rudimentary implementation of tanh-sinh quadrature for one-parameter integrand
+// A rudimentary implementation of tanh-sinh quadrature for one-parameter integrand
 template <typename f>
 r64 tanhSinhQuadrature(f& integrand, r64 lowerBound, r64 upperBound, r64 absTolerance) 
 {
-   static r64* myAbscissae;
-   static r64* myWeights;
+   static r64* abscissae;
+   static r64* weights;
    static size_t storedNonnegativePointCount;
    size_t maxStages = 8; 
    const r64 windowSize = 1.0;
@@ -101,18 +99,18 @@ r64 tanhSinhQuadrature(f& integrand, r64 lowerBound, r64 upperBound, r64 absTole
    {
       size_t maxNonnegativePoints = 2000;
       r64 minSubintervalLength = windowSize/(1ULL << maxStages);
-      myAbscissae = (r64*)malloc(maxNonnegativePoints*sizeof(*myAbscissae));
-      myWeights = (r64*)malloc(maxNonnegativePoints*sizeof(*myWeights));
+      abscissae = (r64*)malloc(maxNonnegativePoints*sizeof(*abscissae));
+      weights = (r64*)malloc(maxNonnegativePoints*sizeof(*weights));
 
       for(storedNonnegativePointCount = 0; 
           storedNonnegativePointCount < maxNonnegativePoints; 
           storedNonnegativePointCount++)
       {
          r64 pointCosh = cosh(HPI64*sinh(storedNonnegativePointCount*minSubintervalLength));
-         myAbscissae[storedNonnegativePointCount] = tanh(HPI64*sinh(storedNonnegativePointCount*minSubintervalLength));
-         myWeights[storedNonnegativePointCount] = HPI64*cosh(storedNonnegativePointCount*minSubintervalLength)/(pointCosh*pointCosh);
+         abscissae[storedNonnegativePointCount] = tanh(HPI64*sinh(storedNonnegativePointCount*minSubintervalLength));
+         weights[storedNonnegativePointCount] = HPI64*cosh(storedNonnegativePointCount*minSubintervalLength)/(pointCosh*pointCosh);
 
-         if(myWeights[storedNonnegativePointCount] < 1.0e-13)
+         if(weights[storedNonnegativePointCount] < 1.0e-13)
          {
             storedNonnegativePointCount--;
             break;
@@ -129,8 +127,8 @@ r64 tanhSinhQuadrature(f& integrand, r64 lowerBound, r64 upperBound, r64 absTole
    auto transformedIntegrand = [integrand, lowerBound, upperBound](r64 x)
    {
       r64 normalizedX = 0.5*(upperBound - lowerBound)*x + 0.5*(upperBound + lowerBound); // "normalized" to [-1, 1]
-      r64 value = integrand(normalizedX);
 
+      r64 value = integrand(normalizedX);
 
       return value;
    };
@@ -138,26 +136,21 @@ r64 tanhSinhQuadrature(f& integrand, r64 lowerBound, r64 upperBound, r64 absTole
 
    size_t stage;
    r64 subintervalLength = windowSize;
-   result = subintervalLength*myWeights[0]*transformedIntegrand(0);
+   result = subintervalLength*weights[0]*transformedIntegrand(0);
 
-   //printf("stage 1\n");
    //Evaluate the integrand at every first-stage abscissa
    size_t nodeIndex = stride;
    for(int i = 1; 
        nodeIndex < storedNonnegativePointCount; 
        i++, nodeIndex = i*stride)
    {
-      r64 abscissa = myAbscissae[nodeIndex]; 
-      result += myWeights[nodeIndex]*(transformedIntegrand(abscissa) + transformedIntegrand(-abscissa));
-
-      //printf("\t%d: abscissa = %f, weight = %f\n", i, abscissa, myWeights[nodeIndex]);
+      r64 abscissa = abscissae[nodeIndex]; 
+      result += weights[nodeIndex]*(transformedIntegrand(abscissa) + transformedIntegrand(-abscissa));
    }
 
    stride >>= 1;
    for(stage = 2; stage <= maxStages; stage++)
    {
-      //printf("stage %d\n", (int)stage);
-
       subintervalLength *= 0.5;
       //subintervalLength = windowSize / (1 << (stage-1));
 
@@ -168,10 +161,8 @@ r64 tanhSinhQuadrature(f& integrand, r64 lowerBound, r64 upperBound, r64 absTole
           nodeIndex < storedNonnegativePointCount;
           i++, nodeIndex = (2*i + 1)*stride)
       {
-         r64 abscissa = myAbscissae[nodeIndex]; 
-         stageSum += myWeights[nodeIndex]*(transformedIntegrand(abscissa) + transformedIntegrand(-abscissa));
-
-         //printf("\t%d: abscissa = %f, weight = %f\n", i, abscissa, myWeights[nodeIndex]);
+         r64 abscissa = abscissae[nodeIndex]; 
+         stageSum += weights[nodeIndex]*(transformedIntegrand(abscissa) + transformedIntegrand(-abscissa));
       }
 
       if(subintervalLength*fabs(stageSum) < absTolerance && stage > 1)
@@ -182,11 +173,7 @@ r64 tanhSinhQuadrature(f& integrand, r64 lowerBound, r64 upperBound, r64 absTole
 
       result += stageSum;
       stride >>= 1;
-
-      //printf("\ttanh-sinh 1: %.15f\n\n", result);
    }
-
-   //printf("\n ----- \n");
 
    result = 0.5*(upperBound - lowerBound)*subintervalLength*result;
 
@@ -215,7 +202,6 @@ r64 twoElectronIntegrandInner(r64 x2, void* params)
    r64 p = paramsIn->p;
    r64 q = paramsIn->q;
 
-
 	r64 value = floatCompare(x1, x2) ? 0.0 : (sin(n*x1)*sin(m*x2) - sin(n*x2)*sin(m*x1))*(sin(p*x1)*sin(q*x2) - sin(p*x2)*sin(q*x1))/fabs(x1 - x2);
 
 	return value;
@@ -231,16 +217,20 @@ r64 twoElectronIntegrandOuter(r64 x1, void* params)
    F.function = &twoElectronIntegrandInner;
    F.params = &paramsOut;
 
-   r64 result = gsl_integration_glfixed(&F, paramsIn->lowerBound, paramsIn->upperBound, paramsIn->glTable);
+   // Using symmetry
+   r64 result = gsl_integration_glfixed(&F, paramsIn->lowerBound, x1, paramsIn->glTable);
 
 	return result;
 }
 
-//Same bounds for both integrals
-r64 twoElectronGaussLegendre(int i, int j, int k, int l, r64 iWellWidth, r64 lowerBound, 
-                             r64 upperBound, size_t maxSteps = 32)
+// NOTE: Only for integrals that don't vanish by group theory.
+r64 twoElectronGaussLegendre(size_t i, size_t j, size_t k, size_t l, r64 iWellWidth, r64 lowerBound, 
+                             r64 upperBound, size_t maxNodes = 32, gsl_integration_glfixed_table* glTable = 0)
 {
-   gsl_integration_glfixed_table* glTable = gsl_integration_glfixed_table_alloc(maxSteps);
+   if(!glTable)
+   {
+      glTable = gsl_integration_glfixed_table_alloc(maxNodes);
+   }
 
    IntegrandParametersOuter params = 
       {PI64*iWellWidth*i, PI64*iWellWidth*j, PI64*iWellWidth*k, PI64*iWellWidth*l, 
@@ -259,139 +249,141 @@ r64 twoElectronGaussLegendre(int i, int j, int k, int l, r64 iWellWidth, r64 low
 #pragma pack(push, 1)
 struct IntegralsHeader
 {
-   size_t integralCount;
-   size_t maxSpatialIndex;
+   size_t maxWavenumber;
+   size_t integralsWritten;
    size_t maxSteps;
-   u32 method;
-   r64 wellWidth;
    r64 tolerance;
-};
-struct TwoElectronIntegral
-{
-   //Could later infer these indices, but good to have them for now
-   size_t i, j, k, l;
-   r64 value;
+   r64 wellWidth;
 };
 #pragma pack(pop)
 
-int writeTwoElectronIntegrals(size_t maxSpatialIndex, r64 wellWidth, r64 tolerance, TwoElectronIntegral* storage, size_t maxIntegrals)
+// NOTE: Only for integrals that don't vanish by group theory.
+r64 getTwoElectronIntegral(size_t i, size_t j, size_t k, size_t l, r64 wellWidth, r64* scratch, size_t maxSteps, 
+                           gsl_integration_glfixed_table* glTable, r64 tolerance = 1e-8)
 {
    r64 iWellWidth = 1.0/wellWidth;
-   size_t maxSteps = 20;//50;
+   size_t rombergEvals = 0;
+   r64 n = PI64*iWellWidth*i; 
+   r64 m = PI64*iWellWidth*j; 
+   r64 p = PI64*iWellWidth*k; 
+   r64 q = PI64*iWellWidth*l;
 
-   r64* rombergArray1 = (r64*)malloc(2*maxSteps*sizeof(*rombergArray1));
-   r64* rombergArray2 = (r64*)malloc(2*maxSteps*sizeof(*rombergArray2));
+   r64* rombergArray1 = scratch;
+   r64* rombergArray2 = scratch + 2*maxSteps;
 
-   //FILE* outputFile = fopen("integrals.dat", "wb");
+   r64 value = 0;
 
-   //if(outputFile)
-   //{
-   if(storage)
+
+   auto integrand = [n, m, p, q, rombergArray1, maxSteps, tolerance, wellWidth, &rombergEvals](r64 x1)
    {
 
-   //for(int i = 1; i < 4; i++)
-   //{
-   //   for(int j = 1; j < i+2; j++)
-   //   {
-   //      for(int k = 1; k < i+2; k++)
-   //      {
-   //         for(int l = 1; l < i+2; l++)
-   //         {
-   //Only calculate unique integrals(i > j etc.)
-      int integralCount = 0;
-      for(int i = 1; i < maxSpatialIndex && integralCount < maxIntegrals; i++)
+      auto inner = [n, m, p, q, x1](r64 x2)
       {
-         for(int j = i; j < maxSpatialIndex && integralCount < maxIntegrals; j++)
+         r64 value = 0.0;
+
+         if(!floatCompare(x1, x2))
          {
-            for(int k = i; k < maxSpatialIndex && integralCount < maxIntegrals; k++)
-            {
-               for(int l = k; l < maxSpatialIndex && integralCount < maxIntegrals; l++)
-               {
-
-                  r64 n = PI64*iWellWidth*i; 
-                  r64 m = PI64*iWellWidth*j; 
-                  r64 p = PI64*iWellWidth*k; 
-                  r64 q = PI64*iWellWidth*l;
-
-                  size_t rombergEvals = 0;
-                  size_t tanhSinhEvals = 0;
-
-                  auto integrandRomberg = [n, m, p, q, rombergArray1, maxSteps, tolerance, wellWidth, &rombergEvals](r64 x1)
-                  {
-
-                     auto inner = [n, m, p, q, x1](r64 x2)
-                     {
-                        r64 value = 0.0;
-
-                        if(!floatCompare(x1, x2))
-                        {
-                           value = (sin(n*x1)*sin(m*x2) - sin(n*x2)*sin(m*x1))*(sin(p*x1)*sin(q*x2) - sin(p*x2)*sin(q*x1))/(x1 - x2);
-                           //value = (sin(n*x1)*sin(m*x2) - sin(n*x2)*sin(m*x1))*(sin(p*x1)*sin(q*x2) - sin(p*x2)*sin(q*x1))/fabs(x1 - x2);
-                        }
-
-                        return value;
-                     };
-
-                     r64 value = 2.0*rombergIntegrate(inner, 0.0, x1, rombergArray1, maxSteps, tolerance);
-
-                     return value;
-                  };
-
-                  //auto integrandTanhSinh = [n, m, p, q, maxSteps, tolerance, wellWidth](r64 x1)
-                  //{
-
-                  //   auto inner = [n, m, p, q, x1](r64 x2)
-                  //   {
-                  //      r64 value = 0.0;
-
-                  //      if(!floatCompare(x1, x2))
-                  //      {
-                  //         value = (sin(n*x1)*sin(m*x2) - sin(n*x2)*sin(m*x1))*(sin(p*x1)*sin(q*x2) - sin(p*x2)*sin(q*x1))/(x1 - x2);
-                  //         //value = (sin(n*x1)*sin(m*x2) - sin(n*x2)*sin(m*x1))*(sin(p*x1)*sin(q*x2) - sin(p*x2)*sin(q*x1))/fabs(x1 - x2);
-                  //      }
-
-                  //      return value;
-                  //   };
-
-                  //   //r64 value = 2.0*tanhSinhQuadrature(inner, 0.0, wellWidth, tolerance);
-
-                  //   return value;
-                  //};
-
-                  r64 rombergValue = rombergIntegrate(integrandRomberg, 0, wellWidth, rombergArray2, maxSteps, tolerance, rombergEvals);
-                  //r64 tanhSinhValue = tanhSinhQuadrature(integrandTanhSinh, 0.0, wellWidth, 10e-14);
-                  //r64 integralValue = 
-                  //   (floatCompare(rombergValue, tanhSinhValue) || rombergValue < 10.0e-12)? rombergValue : (tanhSinhValue, printf("\n\tRomberg discarded\n"));
-                  //printf("Romberg: %e, tanh-sinh: %e\n", rombergValue, tanhSinhValue);
-                  //
-                  TwoElectronIntegral& integral = storage[integralCount++];
-                  integral.i = i;
-                  integral.j = j;
-                  integral.k = k;
-                  integral.l = l;
-                  integral.value = rombergValue;
-
-                  //TwoElectronIntegral integral;
-                  //integral.i = i;
-                  //integral.j = j;
-                  //integral.k = k;
-                  //integral.l = l;
-                  //integral.value = rombergValue;
-                  //fwrite(&integral, sizeof(integral), 1, outputFile);
-
-                  //printf("i = %d, j = %d, k = %d, l = %d\n\t%.10e, %.10e\n", i, j, k, l, rombergValue, tanhSinhValue);
-                  //r64 gaussLegendreValue = twoElectronGaussLegendre(i, j, k, l, iWellWidth, 0, wellWidth, 5000);
-                  //printf("i = %d, j = %d, k = %d, l = %d\n\t%.10e, %.10e, %.10e\n", i, j, k, l, rombergValue, tanhSinhValue, gaussLegendreValue);
-                  
-                  //printf("%d - i = %d, j = %d, k = %d, l = %d\n", runningIndex++, i, j, k, l);
-               }
-            }
+            value = (sin(n*x1)*sin(m*x2) - sin(n*x2)*sin(m*x1))*(sin(p*x1)*sin(q*x2) - sin(p*x2)*sin(q*x1))/(x1 - x2);
          }
+
+         return value;
+      };
+
+      //r64 value = rombergIntegrate(inner, 0.0, x1, rombergArray1, maxSteps, tolerance, rombergEvals, 2);
+      r64 value = tanhSinhQuadrature(inner, 0.0, x1, tolerance);
+
+      return value;
+   };
+
+   //value = 2.0*twoElectronGaussLegendre(i, j, k, l, iWellWidth, 0, wellWidth, 1000, glTable);
+   //value = 2.0*rombergIntegrate(integrand, 0, wellWidth, rombergArray2, maxSteps, tolerance, rombergEvals);
+   value = 2.0*tanhSinhQuadrature(integrand, 0.0, wellWidth, tolerance);
+
+
+   return value;
+}
+
+
+int writeTwoElectronIntegrals(size_t maxWavenumber, r64 wellWidth, r64 tolerance)
+{
+   r64 iWellWidth = 1.0/wellWidth;
+   size_t maxSteps = 20;
+
+   r64* rombergArray = (r64*)malloc(4*maxSteps*sizeof(*rombergArray));
+   gsl_integration_glfixed_table* glTable = gsl_integration_glfixed_table_alloc(100);
+
+   FILE* outputFile = fopen("integrals.txt", "wb");
+
+   if(outputFile)
+   {
+
+      size_t dim = choose2(maxWavenumber);
+      size_t dimCounter = 1;
+      r64* rowBuffer = (r64*)malloc(dim*sizeof(*rowBuffer));
+      size_t rowCounter = 0;
+      size_t integralCount = 0;
+
+      size_t i = 1;
+      size_t j = 2;
+      size_t k = 1;
+      size_t l = 2;
+
+      fseek(outputFile, sizeof(IntegralsHeader), SEEK_SET);
+      for(int row = 0; row < dim; row++)
+      {
+         for(int column = row; column < dim; column++)
+         {
+            // Skip integrals vanishing by group theory
+            int ijParity = ((i ^ j) & 1);
+            int klParity = ((k ^ l) & 1);
+            if((ijParity && klParity) || (!ijParity && !klParity))
+            {
+
+               r64 n = PI64*iWellWidth*i; 
+               r64 m = PI64*iWellWidth*j; 
+               r64 p = PI64*iWellWidth*k; 
+               r64 q = PI64*iWellWidth*l;
+
+               r64 integralValue = getTwoElectronIntegral(i, j, k, l, wellWidth, rombergArray, maxSteps, glTable, tolerance);
+               rowBuffer[rowCounter++] = integralValue;
+            }
+
+            if(j++ == maxWavenumber)
+            {
+               i++;
+               j = i + 1;
+            }
+
+         }
+
+         fwrite(rowBuffer, rowCounter*sizeof(*rowBuffer), 1, outputFile);
+         integralCount += rowCounter;
+         rowCounter = 0;
+
+         if(l++ == maxWavenumber)
+         {
+            k++;
+            l = k + 1;
+         }
+
+         i = k;
+         j = l;
+
+         printf("%zd/%zd\n", dimCounter++, dim);
       }
 
-      free(rombergArray1);
-      free(rombergArray2);
-      //fclose(outputFile);
+      IntegralsHeader header = {};
+      header.maxWavenumber = maxWavenumber;
+      header.integralsWritten = integralCount;
+      header.maxSteps = maxSteps;
+      header.tolerance = tolerance;
+      header.wellWidth = wellWidth;
+      fseek(outputFile, 0, SEEK_SET);
+      fwrite(&header, sizeof(header), 1, outputFile);
+
+      free(rombergArray);
+      free(rowBuffer);
+      fclose(outputFile);
 
       return 0;
    }
@@ -438,67 +430,19 @@ double simpsonStep(F f, size_t step, double previousEstimate, double lower, doub
    return result;
 }
 
-r64 getTwoElectronIntegral(size_t i, size_t j, size_t k, size_t l, r64 wellWidth, r64* scratch, size_t maxSteps)
-{
-   r64 iWellWidth = 1.0/wellWidth;
-   r64 tolerance = 1e-8;
-   size_t rombergEvals = 0;
-   r64 n = PI64*iWellWidth*i; 
-   r64 m = PI64*iWellWidth*j; 
-   r64 p = PI64*iWellWidth*k; 
-   r64 q = PI64*iWellWidth*l;
-
-   r64* rombergArray1 = scratch;
-   r64* rombergArray2 = scratch + 2*maxSteps;
-
-   r64 value = 0;
-
-   auto integrand = [n, m, p, q, rombergArray1, maxSteps, tolerance, wellWidth, &rombergEvals](r64 x1)
-   {
-
-      auto inner = [n, m, p, q, x1](r64 x2)
-      {
-         r64 value = 0.0;
-
-         if(!floatCompare(x1, x2))
-         {
-            value = (sin(n*x1)*sin(m*x2) - sin(n*x2)*sin(m*x1))*(sin(p*x1)*sin(q*x2) - sin(p*x2)*sin(q*x1))/(x1 - x2);
-         }
-
-         return value;
-      };
-
-      //r64 value = 2.0*rombergIntegrate(inner, 0.0, x1, rombergArray1, maxSteps, tolerance, rombergEvals, 2);
-      //r64 value = 2.0*adaptiveSimpson(inner, 0.0, x1, tolerance, maxSteps);
-      r64 value = 2.0*tanhSinhQuadrature(inner, 0.0, x1, tolerance);
-
-      return value;
-   };
-
-   //value = rombergIntegrate(integrand, 0, wellWidth, rombergArray2, maxSteps, tolerance, rombergEvals);
-   //value = adaptiveSimpson(integrand, 0.0, wellWidth, tolerance, maxSteps);
-   value = tanhSinhQuadrature(integrand, 0.0, wellWidth, tolerance);
-
-   return value;
-}
-
-
-void testIntegration(int i, int j, int k, int l, r64 wellWidth)
+void testIntegration(int i, int j, int k, int l, r64 wellWidth, r64 tolerance)
 {
    r64 iWellWidth = 1.0/wellWidth;
    r64 n = PI64*iWellWidth*i; 
    r64 m = PI64*iWellWidth*j; 
    r64 p = PI64*iWellWidth*k; 
    r64 q = PI64*iWellWidth*l;
-   size_t rombergEvals = 0;
-   size_t tanhSinhEvals = 0;
 
-   r64 tolerance = 1e-8;
-   size_t maxSteps = 50;
+   size_t maxSteps = 20;
    r64* rombergArray1 = (r64*)malloc(2*maxSteps*sizeof(*rombergArray1));
    r64* rombergArray2 = (r64*)malloc(2*maxSteps*sizeof(*rombergArray2));
 
-   auto integrandRomberg = [n, m, p, q, rombergArray1, maxSteps, tolerance, wellWidth, &rombergEvals](r64 x1)
+   auto integrandRomberg = [n, m, p, q, rombergArray1, maxSteps, tolerance, wellWidth](r64 x1)
    {
 
       auto inner = [n, m, p, q, x1](r64 x2)
@@ -513,14 +457,13 @@ void testIntegration(int i, int j, int k, int l, r64 wellWidth)
          return value;
       };
 
-      r64 value = 2.0*rombergIntegrate(inner, 0.0, x1, rombergArray1, maxSteps, tolerance);
+      r64 value = rombergIntegrate(inner, 0.0, x1, rombergArray1, maxSteps, tolerance);
 
       return value;
    };
 
    auto integrandTanhSinh = [n, m, p, q, maxSteps, tolerance, wellWidth](r64 x1)
    {
-
       auto inner = [n, m, p, q, x1](r64 x2)
       {
          r64 value = 0.0;
@@ -533,16 +476,23 @@ void testIntegration(int i, int j, int k, int l, r64 wellWidth)
          return value;
       };
 
-      r64 value = 2.0*tanhSinhQuadrature(inner, 0.0, wellWidth, tolerance);
+      r64 value = tanhSinhQuadrature(inner, 0.0, x1, tolerance);
 
       return value;
    };
 
-   r64 rombergValue = rombergIntegrate(integrandRomberg, 0, wellWidth, rombergArray2, maxSteps, tolerance, rombergEvals);
-   r64 tanhSinhValue = tanhSinhQuadrature(integrandTanhSinh, 0.0, wellWidth, tolerance);//10e-14);
-   r64 gaussLegendreValue = twoElectronGaussLegendre(i, j, k, l, iWellWidth, 0, wellWidth, 5000);
+   r64 rombergValue = 2.0*rombergIntegrate(integrandRomberg, 0, wellWidth, rombergArray2, maxSteps, tolerance);
+   r64 tanhSinhValue = 2.0*tanhSinhQuadrature(integrandTanhSinh, 0.0, wellWidth, tolerance);
+   r64 gaussLegendreValue = 2.0*twoElectronGaussLegendre(i, j, k, l, iWellWidth, 0, wellWidth, 100);
    printf("i = %d, j = %d, k = %d, l = %d\n\n", i, j, k, l);
-   printf("Romberg: %e\n", rombergValue);
-   printf("tanh-sinh: %e\n", tanhSinhValue);
-   printf("GL: %e\n", gaussLegendreValue);
+   printf("Romberg: %.10e\n", rombergValue);
+   printf("tanh-sinh: %.10e\n", tanhSinhValue);
+   printf("GL: %.10e\n", gaussLegendreValue);
+
+   if(fabs(rombergValue - tanhSinhValue) > 0.001*rombergValue && rombergValue > 1e-10)
+   {
+      printf("Warning: integral values differ significantly(i=%zd, j=%zd, k=%zd, l=%zd): \n", i, j, k, l);
+      printf("\t\tRomberg: %e, tanh-sinh: %e, GL: %e\n", rombergValue, tanhSinhValue, gaussLegendreValue);
+   }
+
 }

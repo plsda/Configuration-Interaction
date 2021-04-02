@@ -1,10 +1,31 @@
 # Configuration-Interaction
 
-Davidson's algorithm is a numerical algorithm for finding the lowest eigenvalue(s) of diagonally dominant (real symmetric) matrices. Davidson's algorithm
-and its derivatives are widely used in configuration interaction calculations.
 
-Example output:
+The CI method is a method for solving the many-body Schrödinger eqution based on the Ritz method aka the method of linear variations.
+This program solves numerically the first eigenstate of the 1D infinite potential well with two interacting electrons. More precisely,
+we solve the time-independent Schrödinger equation
 
+![sc1](https://github.com/plsda/Configuration-Interaction/blob/main/tise.PNG)
+
+by expanding the wavefunction in a chosen basis and solving the eigenvalue problem
+
+![sc1](https://github.com/plsda/Configuration-Interaction/blob/main/eigenEq.PNG)
+
+where the Hamiltonian is now represented as a matrix in a basis formed by a finite set of functions
+
+![sc1](https://github.com/plsda/Configuration-Interaction/blob/main/basisFunction.PNG)
+
+There are many other possible choices of basis set, but this choice is easily motivated starting from the independent-electron model 
+and by the fact that we target a symmetric spatial state.
+
+One of the components needed for the CI method is an efficient iterative diagonalization procedure. One such method that
+has emerged from the needs of quantum chemistry is Davidson's method and its variations. 
+
+Davidson's algorithm is a numerical algorithm for finding the lowest(highest) eigenvalue(s) of diagonally dominant (real symmetric) matrices. Davidson's algorithm
+and its derivatives are widely used in configuration interaction calculations. This program includes an implementation of Davidson's method
+for the lowest eigenpair of a matrix satisfying the conditions mentioned above.
+
+Davidson's method example output:
 
 Let A be a N by N matrix defined by 
 
@@ -21,7 +42,20 @@ For N = 10000
 ![sc1](https://github.com/plsda/Configuration-Interaction/blob/main/code/sampleOutput10000.PNG)
 
 
+It turns out that the ground state energy of the system is approximately 2.2971 a.u.
 
+![sc1](https://github.com/plsda/Configuration-Interaction/blob/main/CIExampleOutput.PNG)
+
+
+
+Dependencies:
+
+  - Intel MKL
+
+  - GSL (not strictly necessary for the core functionality)
+  
+
+Building requires C++ 17 or newer. The program has only been tested on Windows 10 and build.bat builds the program using MSVC, but the code should be platform independent.
 
 
 References:
