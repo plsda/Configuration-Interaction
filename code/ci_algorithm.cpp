@@ -21,14 +21,11 @@ int main()
    // In atomic units
    r64 wellWidth = 4.0;
 
-   gsl_integration_glfixed_table* glTable = gsl_integration_glfixed_table_alloc(100);
-
    size_t maxWavenumber = 10;
    size_t dim = choose2(maxWavenumber);
    r64 intTolerance = 1e-10;
    r64* integralLookup = 0;
 
-   //printf("Read integrals from file(y/n)? ");
    printf("\n\t1 - Compute on-the-fly\n\t2 - Read integrals from integrals.txt\n\t3 - Calculate and write integrals to file\n\n>");
    char choice;
    scanf("%c", &choice);
@@ -91,6 +88,7 @@ int main()
 
    size_t maxSteps = 10;
    r64* rombergArray = (r64*)malloc(4*maxSteps*sizeof(*rombergArray));
+   gsl_integration_glfixed_table* glTable = gsl_integration_glfixed_table_alloc(100);
 
    size_t i = 1;
    size_t j = 2;
@@ -118,17 +116,7 @@ int main()
             }
             else
             {
-               //clock_t clockBegin = clock();
                twoElectronContribution = getTwoElectronIntegral(i, j, k, l, wellWidth, rombergArray, maxSteps, glTable, intTolerance);
-               //clock_t clockEnd = clock();
-
-               //r64 intTime = ((r64)(clockEnd - clockBegin)) / CLOCKS_PER_SEC;
-               //printf("%f\n", intTime);
-
-               //////if(intTime > 0.03)
-               //////{
-               //   printf("\n\t%fs \t\t i = %zd, j = %zd, k = %zd, l = %zd, \t %f\n", intTime, i, j, k, l, twoElectronContribution);
-               //////}
             }
          }
 

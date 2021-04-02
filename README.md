@@ -5,15 +5,15 @@ The CI method is a method for solving the many-body Schrödinger eqution based o
 This program solves numerically the first eigenstate of the 1D infinite potential well with two interacting electrons. More precisely,
 we solve the time-independent Schrödinger equation
 
-![sc1](https://github.com/plsda/Configuration-Interaction/blob/main/tise.PNG)
+![sc1](https://github.com/plsda/Configuration-Interaction/main/tise.PNG)
 
 by expanding the wavefunction in a chosen basis and solving the eigenvalue problem
 
-![sc1](https://github.com/plsda/Configuration-Interaction/blob/main/eigenEq.PNG)
+![sc2](https://github.com/plsda/Configuration-Interaction/main/eigenEq.PNG)
 
 where the Hamiltonian is now represented as a matrix in a basis formed by a finite set of functions
 
-![sc1](https://github.com/plsda/Configuration-Interaction/blob/main/basisFunction.PNG)
+![sc3](https://github.com/plsda/Configuration-Interaction/main/basisFunction.PNG)
 
 There are many other possible choices of basis set, but this choice is easily motivated starting from the independent-electron model 
 and by the fact that we target a symmetric spatial state.
@@ -29,22 +29,22 @@ Davidson's method example output:
 
 Let A be a N by N matrix defined by 
 
-![sc1](https://github.com/plsda/Configuration-Interaction/blob/main/code/eqn.PNG)
+![sc4](https://github.com/plsda/Configuration-Interaction/blob/main/code/eqn.PNG)
 
 (the example used in [3])
 
 For N = 1000
 
-![sc1](https://github.com/plsda/Configuration-Interaction/blob/main/code/sampleOutput1000.PNG)
+![sc5](https://github.com/plsda/Configuration-Interaction/blob/main/code/sampleOutput1000.PNG)
 
 For N = 10000
 
-![sc1](https://github.com/plsda/Configuration-Interaction/blob/main/code/sampleOutput10000.PNG)
+![sc6](https://github.com/plsda/Configuration-Interaction/blob/main/code/sampleOutput10000.PNG)
 
 
 It turns out that the ground state energy of the system is approximately 2.2971 a.u.
 
-![sc1](https://github.com/plsda/Configuration-Interaction/blob/main/CIExampleOutput.PNG)
+![sc7](https://github.com/plsda/Configuration-Interaction/blob/main/CIExampleOutput.PNG)
 
 
 
@@ -55,7 +55,8 @@ Dependencies:
   - GSL (not strictly necessary for the core functionality)
   
 
-Building requires C++ 17 or newer. The program has only been tested on Windows 10 and build.bat builds the program using MSVC, but the code should be platform independent.
+Building requires C++ 17 or newer. The program has only been tested on Windows 10 and build.bat builds the program using MSVC, but the code should be platform independent as long
+as the dependencies listed are upported on the platform.
 
 
 References:
