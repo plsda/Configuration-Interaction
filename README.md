@@ -44,7 +44,7 @@ For N = 10000
 
 It turns out that the ground state energy of the system is approximately 2.2971 a.u.
 
-![sc7](https://github.com/plsda/Configuration-Interaction/blob/main/CIExampleOutput.PNG)
+![sc7](https://github.com/plsda/Configuration-Interaction/blob/main/CIExampleOutput.png)
 
 
 
