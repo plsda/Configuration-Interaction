@@ -234,7 +234,6 @@ int main()
    printf("Variance: %.10f\n",localEnergyVariance);
    printf("\n\nCompleted iterations: %i", info.completedIterations);
    printf("\n\nDavidson time: %fs", info.elapsedTime);
-#endif
 
    getchar();
    getchar();

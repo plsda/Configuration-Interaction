@@ -491,7 +491,7 @@ void testIntegration(int i, int j, int k, int l, r64 wellWidth, r64 tolerance)
 
    if(fabs(rombergValue - tanhSinhValue) > 0.001*rombergValue && rombergValue > 1e-10)
    {
-      printf("Warning: integral values differ significantly(i=%zd, j=%zd, k=%zd, l=%zd): \n", i, j, k, l);
+      printf("Warning: integral values differ significantly(i=%d, j=%d, k=%d, l=%d): \n", i, j, k, l);
       printf("\t\tRomberg: %e, tanh-sinh: %e, GL: %e\n", rombergValue, tanhSinhValue, gaussLegendreValue);
    }
 
